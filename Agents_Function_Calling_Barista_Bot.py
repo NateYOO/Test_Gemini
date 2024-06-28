@@ -6,10 +6,7 @@ from typing import List, Tuple
 st.set_page_config(page_title="Barista Bot", page_icon="☕")
 
 # Gemini API 설정
-if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("GOOGLE_API_KEY not found in Streamlit secrets. Please set it up.")
-    st.stop()
-genai.configure(api_key=st.secrets['AIzaSyAbHQK9OtDTG5x5P1L_9YCnj7DwwoKf88w'])
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
 # 상수 및 전역 변수
 COFFEE_BOT_PROMPT = """You are a coffee order taking system...
