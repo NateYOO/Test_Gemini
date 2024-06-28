@@ -191,6 +191,113 @@ def get_user_order_history(user_id: str) -> List[Dict]:
     history = load_order_history()
     return history.get(user_id, [])
 
+# 새로 추가된 함수들
+def get_bot_response(user_input: str) -> str:
+    state = st.session_state.order_state
+    
+    if not state['drink']:
+        drink = parse_drink(user_input)
+        if drink:
+            state['drink'] = drink
+            return f"{drink} 좋은 선택이세요! {get_drink_description(drink)}\n\n{drink}를 어떻게 준비해 드릴까요?\n\n1. 온도: 따뜻하게 드시겠어요, 아니면 시원한 아이스로 준비해 드릴까요?"
+        else:
+            return "죄송합니다. 주문하신 음료를 이해하지 못했어요. 저희 메뉴에는 아메리카노, 카페라떼, 바닐라라떼, 카푸치노, 카라멜마키아또, 에스프레소 등이 있습니다. 어떤 음료를 드시고 싶으세요?"
+
+    if not state['temp']:
+        temp = parse_temperature(user_input)
+        if temp:
+            state['temp'] = temp
+            return f"{temp} {state['drink']}로 준비하겠습니다.\n\n2. 사이즈: 레귤러 사이즈와 라지 사이즈 중 어떤 것으로 하시겠어요? (라지 사이즈는 500원 추가됩니다)"
+        else:
+            return "죄송합니다. 온도를 이해하지 못했어요. '따뜻하게' 또는 '차갑게'로 말씀해 주세요."
+
+    if not state['size']:
+        size = parse_size(user_input)
+        if size:
+            state['size'] = size
+            return f"{size} 사이즈로 준비하겠습니다.\n\n3. 추가 옵션:\n   - 에스프레소 샷 추가 (500원)\n   - 휘핑크림 추가 (500원)\n   - 시럽 추가 (바닐라/헤이즐넛/카라멜, 각 500원)\n\n원하시는 옵션이 있다면 말씀해 주세요. 없으시다면 '옵션 없음'이라고 해주세요."
+        else:
+            return "죄송합니다. 사이즈를 이해하지 못했어요. '레귤러' 또는 '라지'로 말씀해 주세요."
+
+    if not state['options']:
+        options = parse_options(user_input)
+        if options or user_input.lower() in ['옵션 없음', '없음']:
+            state['options'] = options
+            order_summary = f"{state['temp']} {state['size']} {state['drink']}"
+            if options:
+                order_summary += f" (옵션: {', '.join(options)})"
+            return f"주문 내역을 확인해 드릴게요:\n{order_summary}\n\n이대로 주문하시겠어요? 맞으시면 '네', 수정하실 내용이 있다면 말씀해 주세요."
+        else:
+            return "죄송합니다. 옵션을 이해하지 못했어요. 원하시는 옵션을 정확히 말씀해 주시거나, 없으시면 '옵션 없음'이라고 말씀해 주세요."
+
+    if not state['confirmed']:
+        if '네' in user_input.lower():
+            state['confirmed'] = True
+            return "주문이 확인되었습니다. 결제 방법을 선택해 주세요. 현금, 카드, 모바일 결제 중 어떤 방법으로 하시겠어요?"
+        else:
+            return "주문을 변경하시겠어요? 어떤 부분을 수정할까요? (음료, 온도, 사이즈, 옵션 중 선택해 주세요)"
+
+   if not state['payment_method']:
+        payment_method = parse_payment_method(user_input)
+        if payment_method:
+            state['payment_method'] = payment_method
+            order_result = process_order(st.session_state.current_user, state)
+            st.session_state.order_state = {
+                'drink': None, 'size': None, 'temp': None,
+                'options': [], 'confirmed': False, 'payment_method': None
+            }
+            return f"{order_result}\n{payment_method}로 결제해 주셔서 감사합니다. 주문하신 음료를 곧 준비해 드리겠습니다!"
+        else:
+            return "죄송합니다. 결제 방법을 이해하지 못했어요. 현금, 카드, 모바일 중 하나로 말씀해 주세요."
+
+    return "새로운 주문을 하시려면 음료 이름을 말씀해 주세요."
+
+def get_drink_description(drink: str) -> str:
+    descriptions = {
+        "아메리카노": "깔끔하고 깊은 에스프레소의 풍미를 즐길 수 있는 클래식한 메뉴입니다.",
+        "카페라떼": "부드러운 우유와 에스프레소의 조화로운 맛을 느낄 수 있는 대표적인 카페 메뉴입니다.",
+        "바닐라라떼": "바닐라의 달콤한 향과 에스프레소의 풍미가 잘 어우러진 인기 메뉴입니다.",
+        "카푸치노": "에스프레소와 스팀 밀크, 그리고 풍성한 우유 거품의 완벽한 밸런스를 자랑합니다.",
+        "카라멜마키아또": "달콤한 카라멜과 에스프레소, 우유의 조화가 매력적인 디저트 같은 음료입니다.",
+        "에스프레소": "진한 커피의 맛과 향을 온전히 즐길 수 있는 커피 본연의 맛입니다."
+    }
+    return descriptions.get(drink, "저희 카페의 특별한 메뉴입니다.")
+
+# 추가적인 파싱 함수들
+def parse_drink(input: str) -> str:
+    input = input.lower()
+    for category in MENU.values():
+        for drink in category.keys():
+            if drink.lower() in input:
+                return drink
+    return None
+
+def parse_temperature(input: str) -> str:
+    if any(word in input.lower() for word in ["따뜻", "뜨겁", "핫"]):
+        return "HOT"
+    elif any(word in input.lower() for word in ["차갑", "시원", "아이스"]):
+        return "ICE"
+    return None
+
+def parse_size(input: str) -> str:
+    if any(word in input.lower() for word in SIZE_KEYWORDS["Large"]):
+        return "Large"
+    elif any(word in input.lower() for word in SIZE_KEYWORDS["Regular"]):
+        return "Regular"
+    return None
+
+def parse_options(input: str) -> List[str]:
+    return [option for option in OPTIONS.keys() if option.lower() in input.lower()]
+
+def parse_payment_method(input: str) -> str:
+    if "현금" in input:
+        return "현금"
+    elif "카드" in input:
+        return "카드"
+    elif "모바일" in input:
+        return "모바일"
+    return None
+
 # 세션 상태 초기화
 if 'messages' not in st.session_state:
     st.session_state.messages = []
@@ -204,6 +311,15 @@ if 'convo' not in st.session_state:
         {'role': 'user', 'parts': [COFFEE_BOT_PROMPT]},
         {'role': 'model', 'parts': ["네, 이해했습니다. 주문을 받을 준비가 되었습니다!"]}
     ])
+if 'order_state' not in st.session_state:
+    st.session_state.order_state = {
+        'drink': None,
+        'size': None,
+        'temp': None,
+        'options': [],
+        'confirmed': False,
+        'payment_method': None
+    }
 
 # 메인 애플리케이션
 st.title("☕ 바리스타 봇")
@@ -231,17 +347,7 @@ if prompt:
         # 봇 응답
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            full_response = ""
-            
-            parsed_order = parse_order(prompt)
-            missing_info = get_missing_order_info(parsed_order)
-            
-            if missing_info:
-                full_response = f"죄송합니다. 주문을 완료하기 위해 다음 정보가 더 필요합니다: {', '.join(missing_info)}. 알려주시겠어요?"
-            else:
-                order_result = process_order(st.session_state.current_user, parsed_order)
-                full_response = f"{order_result}\n결제 방법을 선택해 주세요: 현금, 카드, 또는 모바일 결제"
-            
+            full_response = get_bot_response(prompt)
             message_placeholder.markdown(full_response)
         
         st.session_state.messages.append({"role": "assistant", "content": full_response})
@@ -288,9 +394,13 @@ with st.sidebar:
 
     if st.button("새 주문 시작"):
         st.session_state.messages = []
+        st.session_state.order_state = {
+            'drink': None, 'size': None, 'temp': None,
+            'options': [], 'confirmed': False, 'payment_method': None
+        }
         st.experimental_rerun()
 
-# 주문 히스토리 표시
+    # 주문 히스토리 표시
     st.header("주문 히스토리")
     user_history = get_user_order_history(st.session_state.current_user)
     for idx, order in enumerate(user_history, 1):
