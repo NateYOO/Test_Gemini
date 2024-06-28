@@ -16,14 +16,14 @@ COFFEE_BOT_PROMPT = """당신은 한국의 카페에서 주문을 받는 시스�
 
 주문 과정:
 1. 고객의 주문을 듣고 이해합니다.
-2. add_to_order 함수를 사용하여 주문을 추가합니다.
-3. 추가 주문이 있는지 확인합니다.
-4. 주문이 완료되면 confirm_order 함수를 사용하여 주문을 확인합니다.
-5. 주문 확인 후 place_order 함수를 사용하여 주문을 완료합니다.
+2. 주문 내용을 정확히 파악하고 확인합니다.
+3. 추가 주문이나 수정 사항이 있는지 확인합니다.
+4. 주문이 완료되면 전체 주문 내역을 확인합니다.
 
 주의사항:
 - 항상 친절하고 공손한 말투를 사용하세요.
 - 고객의 요청을 정확히 이해했는지 확인하세요.
+- 이전 대화 내용을 참조하여 일관성 있게 응답하세요.
 - 메뉴에 없는 항목을 요청할 경우, 유사한 메뉴를 추천해 주세요.
 - 주문 확인 시 모든 항목과 옵션을 정확히 읽어주세요.
 
@@ -71,41 +71,39 @@ COFFEE_BOT_PROMPT = """당신은 한국의 카페에서 주문을 받는 시스�
 
 # 주문 관리 함수들
 def add_to_order(drink: str, modifiers: List[str] = []) -> None:
-    st.session_state.order.append((drink, modifiers))
+    st.session_state.current_order.append((drink, modifiers))
 
 def get_order() -> List[Tuple[str, List[str]]]:
-    return st.session_state.order
-
-def remove_item(n: int) -> str:
-    return st.session_state.order.pop(int(n) - 1)[0]
+    return st.session_state.current_order
 
 def clear_order() -> None:
-    st.session_state.order.clear()
+    st.session_state.current_order = []
 
 def confirm_order() -> None:
     st.session_state.order_confirmed = True
 
 def place_order() -> int:
-    st.session_state.placed_order = st.session_state.order.copy()
+    st.session_state.placed_order = st.session_state.current_order.copy()
     clear_order()
     return 5  # 예상 대기 시간 (분)
 
 # Gemini 모델 설정
 model = genai.GenerativeModel('gemini-1.0-pro')
-convo = model.start_chat(history=[
-    {'role': 'user', 'parts': [COFFEE_BOT_PROMPT]},
-    {'role': 'model', 'parts': ['네, 이해했습니다. 최선을 다해 주문을 받겠습니다!']}
-])
 
 # 세션 상태 초기화
 if 'messages' not in st.session_state:
     st.session_state.messages = []
-if 'order' not in st.session_state:
-    st.session_state.order = []
+if 'current_order' not in st.session_state:
+    st.session_state.current_order = []
 if 'order_confirmed' not in st.session_state:
     st.session_state.order_confirmed = False
 if 'placed_order' not in st.session_state:
     st.session_state.placed_order = []
+if 'convo' not in st.session_state:
+    st.session_state.convo = model.start_chat(history=[
+        {'role': 'user', 'parts': [COFFEE_BOT_PROMPT]},
+        {'role': 'model', 'parts': ['네, 이해했습니다. 최선을 다해 주문을 받겠습니다!']}
+    ])
 
 # 헤더
 st.title("☕ 바리스타 봇")
@@ -122,12 +120,15 @@ if prompt := st.chat_input("무엇을 주문하시겠습니까?"):
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # 현재 주문 상태 추가
+    current_order_status = f"현재 주문 상태: {st.session_state.current_order}"
+    
     # 봇 응답
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         full_response = ""
         
-        for response in convo.send_message(prompt, stream=True):
+        for response in st.session_state.convo.send_message(prompt + "\n" + current_order_status, stream=True):
             full_response += response.text
             message_placeholder.markdown(full_response + "▌")
         message_placeholder.markdown(full_response)
@@ -136,8 +137,8 @@ if prompt := st.chat_input("무엇을 주문하시겠습니까?"):
 
 # 현재 주문 상태 표시
 st.sidebar.header("현재 주문")
-if st.session_state.order:
-    for idx, (drink, modifiers) in enumerate(st.session_state.order, 1):
+if st.session_state.current_order:
+    for idx, (drink, modifiers) in enumerate(st.session_state.current_order, 1):
         st.sidebar.write(f"{idx}. {drink}")
         if modifiers:
             st.sidebar.write(f"   - {', '.join(modifiers)}")
@@ -145,7 +146,7 @@ else:
     st.sidebar.write("아직 주문 내역이 없습니다.")
 
 # 주문 확인 및 제출 버튼
-if st.session_state.order and not st.session_state.order_confirmed:
+if st.session_state.current_order and not st.session_state.order_confirmed:
     if st.sidebar.button("주문 확인"):
         confirm_order()
         st.sidebar.success("주문이 확인되었습니다!")
@@ -167,7 +168,7 @@ if st.session_state.placed_order:
 # 새 주문 시작 버튼
 if st.session_state.placed_order:
     if st.sidebar.button("새 주문 시작"):
-        st.session_state.order = []
+        st.session_state.current_order = []
         st.session_state.order_confirmed = False
         st.session_state.placed_order = []
         st.experimental_rerun()
