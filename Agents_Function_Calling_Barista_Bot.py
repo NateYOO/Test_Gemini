@@ -237,7 +237,7 @@ def get_bot_response(user_input: str) -> str:
         else:
             return "주문을 변경하시겠어요? 어떤 부분을 수정할까요? (음료, 온도, 사이즈, 옵션 중 선택해 주세요)"
 
-   if not state['payment_method']:
+    if not state['payment_method']:
         payment_method = parse_payment_method(user_input)
         if payment_method:
             state['payment_method'] = payment_method
