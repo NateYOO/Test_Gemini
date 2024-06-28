@@ -2,7 +2,43 @@ import streamlit as st
 import google.generativeai as genai
 from datetime import datetime
 import json
-from utils import parse_order, get_missing_order_info, process_order, get_user_orders, calculate_daily_sales, mark_order_as_paid, cancel_order, change_order_size, display_menu, load_order_history, save_order_history, add_to_order_history, update_order_history, remove_from_order_history, get_user_order_history, get_bot_response
+
+MENU = {
+    "커피 음료": {
+        "아메리카노": {"price": 4500, "options": ["HOT", "ICE"]},
+        "카페라떼": {"price": 5000, "options": ["HOT", "ICE"]},
+        "바닐라라떼": {"price": 5500, "options": ["HOT", "ICE"]},
+        "카푸치노": {"price": 5000, "options": ["HOT"]},
+        "카라멜마키아또": {"price": 5500, "options": ["HOT", "ICE"]},
+        "에스프레소": {"price": 3000, "options": ["HOT"]},
+    },
+    "논커피 음료": {
+        "녹차라떼": {"price": 5500, "options": ["HOT", "ICE"]},
+        "초콜릿": {"price": 5000, "options": ["HOT", "ICE"]},
+        "유자차": {"price": 5000, "options": ["HOT", "ICE"]},
+        "캐모마일티": {"price": 4500, "options": ["HOT"]},
+        "페퍼민트티": {"price": 4500, "options": ["HOT"]},
+    }
+}
+
+SIZES = {"Regular": 0, "Large": 500}
+OPTIONS = {
+    "샷 추가": 500,
+    "휘핑크림 추가": 500,
+    "바닐라 시럽": 500,
+    "헤이즐넛 시럽": 500,
+    "카라멜 시럽": 500
+}
+
+SIZE_KEYWORDS = {
+    "Large": ["large", "큰", "크게", "사이즈업", "라지", "큰 거", "큰거", "큰 사이즈", "대형", "맥시멈"],
+    "Regular": ["regular", "보통", "중간", "기본", "스탠다드", "작은", "작게", "small", "작은 거", "작은거", "작은 사이즈"]
+}
+
+COFFEE_BOT_PROMPT = """당신은 한국의 카페에서 주문을 받는 시스템입니다. 고객의 주문을 정확하게 이해하고 친절하게 응대해야 합니다. 메뉴에 있는 음료만 주문받을 수 있으며, 메뉴에 없는 요청에 대해서는 정중하게 안내해야 합니다.
+ - 다양한 사이즈 요청을 이해하고 주문을 받습니다.
+ - 사용자가 원하는 요청에 따라 금액을 정확히 계산하고 출력합니다.
+ - 친절한게 응답합니다."""
 
 # Streamlit 페이지 설정
 st.set_page_config(page_title="바리스타 봇", page_icon="☕", layout="wide")
@@ -55,18 +91,18 @@ def main():
 
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
-        
+
         with chat_container:
             for message in st.session_state.messages:
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
-            
+
             # 봇 응답
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
                 full_response = get_bot_response(prompt)
                 message_placeholder.markdown(full_response)
-            
+
             st.session_state.messages.append({"role": "assistant", "content": full_response})
 
     # 결제 방법 선택
@@ -82,18 +118,18 @@ def main():
     # 사이드바 (주문 관리)
     with st.sidebar:
         st.title("주문 관리")
-        
+
         st.selectbox("사용자 선택", ["user1", "user2", "user3"], key="current_user")
 
         st.header(f"{st.session_state.current_user}의 현재 주문")
         user_orders = get_user_orders(st.session_state.current_user)
         for idx, order in enumerate(user_orders):
             st.write(f"{idx + 1}. {order['drink']} ({order['size']}, {order['temp']})")
-            st.write(f"   옵션: {', '.join(order['options'])}")
-            st.write(f"   가격: {order['price']}원")
-            st.write(f"   결제: {'완료' if order['paid'] else '미완료'}")
-            st.write(f"   결제 방법: {order.get('payment_method', '미선택')}")
-            
+            st.write(f"  옵션: {', '.join(order['options'])}")
+            st.write(f"  가격: {order['price']}원")
+            st.write(f"  결제: {'완료' if order['paid'] else '미완료'}")
+            st.write(f"  결제 방법: {order.get('payment_method', '미선택')}")
+
             col1, col2 = st.columns(2)
             with col1:
                 if not order['paid']:
@@ -117,23 +153,4 @@ def main():
         # 주문 히스토리 표시
         st.header("주문 히스토리")
         user_history = get_user_order_history(st.session_state.current_user)
-        for idx, order in enumerate(user_history, 1):
-            st.write(f"{idx}. {order['drink']} ({order['size']}, {order['temp']})")
-            st.write(f"   옵션: {', '.join(order['options'])}")
-            st.write(f"   가격: {order['price']}원")
-            st.write(f"   결제: {'완료' if order['paid'] else '미완료'}")
-            st.write(f"   결제 방법: {order.get('payment_method', '미선택')}")
-            st.write(f"   주문 시간: {order['timestamp']}")
-            st.write("---")
-
-        if st.button("주문 히스토리 초기화"):
-            save_order_history({st.session_state.current_user: []})
-            st.success("주문 히스토리가 초기화되었습니다.")
-            st.experimental_rerun()
-
-    # 메인 애플리케이션 끝
-    st.write("바리스타 봇이 실행 중입니다. 주문을 입력해주세요.")
-
-if __name__ == "__main__":
-    initialize_session_state()
-    main()
+        for idx, order
