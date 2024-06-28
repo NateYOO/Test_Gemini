@@ -196,7 +196,7 @@ if 'orders' not in st.session_state:
 if 'current_user' not in st.session_state:
     st.session_state.current_user = "user1"
 if 'convo' not in st.session_state:
-    model = genai.GenerativeModel('gemini-1.0-pro')
+    model = genai.GenerativeModel('gemini-1.5-pro')
     st.session_state.convo = model.start_chat(history=[
         {'role': 'user', 'parts': [COFFEE_BOT_PROMPT]},
         {'role': 'model', 'parts': ["네, 이해했습니다. 주문을 받을 준비가 되었습니다!"]}
