@@ -1,6 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
-from typing import List, Tuple, Dict
+from typing import List, Dict
 from datetime import datetime
 
 # Streamlit 페이지 설정
@@ -13,89 +13,34 @@ if "GOOGLE_API_KEY" not in st.secrets:
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
 # 상수 및 전역 변수
-COFFEE_BOT_PROMPT = COFFEE_BOT_PROMPT = """You are an order-taking system at a cafe in Korea. You must accurately understand customer orders and respond politely. You can only take orders for drinks on the menu and should politely guide customers if they request items not on the menu.
-
-Ordering process:
-1. Listen to and understand the customer's order.
-2. Accurately capture and confirm the order details.
-3. Check if there are any additional orders or modifications.
-4. Confirm the entire order when it's complete.
-
-Important notes:
-- Always use a friendly and polite tone.
-- Make sure you've understood the customer's request correctly.
-- Refer to previous conversation content to maintain consistency in your responses.
-- If a menu item is requested that's not available, recommend similar items.
-- When confirming an order, accurately read back all items and options.
-
-Menu:
-Coffee Drinks:
-- Americano (HOT/ICE)
-- Cafe Latte (HOT/ICE)
-- Vanilla Latte (HOT/ICE)
-- Cappuccino (HOT)
-- Caramel Macchiato (HOT/ICE)
-- Espresso
-
-Non-Coffee Drinks:
-- Green Tea Latte (HOT/ICE)
-- Hot Chocolate (HOT/ICE)
-- Yuzu Tea (HOT/ICE)
-- Chamomile Tea (HOT)
-- Peppermint Tea (HOT)
-
-Options:
-- Milk options: Regular, Low-fat, Non-fat, Soy, Oat milk
-- Syrup additions: Vanilla, Hazelnut, Caramel (500 won per pump)
-- Extra shot (500 won per shot)
-- Add whipped cream (500 won)
-
-Sizes:
-- Regular (R)
-- Large (L) (500 won extra)
-
-Operating hours: Daily from 7 AM to 10 PM
-
-Prices:
-- Espresso: 3,000 won
-- All other drinks: Regular 4,500 won, Large 5,000 won
-- Additional costs for options as noted above
-
-Special notices:
-- Today's recommended menu: Vanilla Latte
-- Seasonal limited menu: Pistachio Latte (HOT/ICE)
-
-When ordering, "hot" is considered HOT, "cold" or "iced" is considered ICE.
-If a customer just says "(drink name) please", it's assumed to be HOT and Regular size.
-
-Please take and process customer orders based on this information. When the order is complete, say "Enjoy your drink!"."""
+COFFEE_BOT_PROMPT = """You are an order-taking system at a cafe in Korea. You must accurately understand customer orders and respond politely. You can only take orders for drinks on the menu and should politely guide customers if they request items not on the menu. Respond in Korean, maintaining a polite and friendly tone appropriate for a Korean cafe setting."""
 
 # 메뉴 및 가격 정보
 MENU = {
-    "Coffee Drinks": {
-        "Americano": {"price": 4500, "options": ["HOT", "ICE"]},
-        "Cafe Latte": {"price": 5000, "options": ["HOT", "ICE"]},
-        "Vanilla Latte": {"price": 5500, "options": ["HOT", "ICE"]},
-        "Cappuccino": {"price": 5000, "options": ["HOT"]},
-        "Caramel Macchiato": {"price": 5500, "options": ["HOT", "ICE"]},
-        "Espresso": {"price": 3000, "options": ["HOT"]},
+    "커피 음료": {
+        "아메리카노": {"price": 4500, "options": ["HOT", "ICE"]},
+        "카페라떼": {"price": 5000, "options": ["HOT", "ICE"]},
+        "바닐라라떼": {"price": 5500, "options": ["HOT", "ICE"]},
+        "카푸치노": {"price": 5000, "options": ["HOT"]},
+        "카라멜마키아또": {"price": 5500, "options": ["HOT", "ICE"]},
+        "에스프레소": {"price": 3000, "options": ["HOT"]},
     },
-    "Non-Coffee Drinks": {
-        "Green Tea Latte": {"price": 5500, "options": ["HOT", "ICE"]},
-        "Hot Chocolate": {"price": 5000, "options": ["HOT", "ICE"]},
-        "Yuzu Tea": {"price": 5000, "options": ["HOT", "ICE"]},
-        "Chamomile Tea": {"price": 4500, "options": ["HOT"]},
-        "Peppermint Tea": {"price": 4500, "options": ["HOT"]},
+    "논커피 음료": {
+        "녹차라떼": {"price": 5500, "options": ["HOT", "ICE"]},
+        "초콜릿": {"price": 5000, "options": ["HOT", "ICE"]},
+        "유자차": {"price": 5000, "options": ["HOT", "ICE"]},
+        "캐모마일티": {"price": 4500, "options": ["HOT"]},
+        "페퍼민트티": {"price": 4500, "options": ["HOT"]},
     }
 }
 
 SIZES = {"Regular": 0, "Large": 500}
 OPTIONS = {
-    "Extra shot": 500,
-    "Whipped cream": 500,
-    "Vanilla syrup": 500,
-    "Hazelnut syrup": 500,
-    "Caramel syrup": 500
+    "샷 추가": 500,
+    "휘핑크림 추가": 500,
+    "바닐라 시럽": 500,
+    "헤이즐넛 시럽": 500,
+    "카라멜 시럽": 500
 }
 
 # 주문 및 사용자 관리 함수
@@ -142,51 +87,51 @@ if 'current_user' not in st.session_state:
 if 'convo' not in st.session_state:
     st.session_state.convo = model.start_chat(history=[
         {'role': 'user', 'parts': [COFFEE_BOT_PROMPT]},
-        {'role': 'model', 'parts': ["Understood. I'm ready to take orders!"]}
+        {'role': 'model', 'parts': ["네, 이해했습니다. 주문을 받을 준비가 되었습니다!"]}
     ])
 
 # 메뉴판 표시 함수
 def display_menu():
-    st.header("☕ Our Menu")
+    st.header("☕ 메뉴판")
     for category, items in MENU.items():
         st.subheader(category)
         for item, details in items.items():
             price = details['price']
             options = ', '.join(details['options'])
-            st.write(f"- {item}: {price} won ({options})")
+            st.write(f"- {item}: {price}원 ({options})")
     
-    st.subheader("Sizes")
+    st.subheader("사이즈")
     for size, price in SIZES.items():
-        st.write(f"- {size}: +{price} won")
+        st.write(f"- {size}: +{price}원")
     
-    st.subheader("Additional Options")
+    st.subheader("추가 옵션")
     for option, price in OPTIONS.items():
-        st.write(f"- {option}: +{price} won")
+        st.write(f"- {option}: +{price}원")
 
-# 레이아웃
-col1, col2 = st.columns([2, 1])
+# 메인 애플리케이션
+st.title("☕ 바리스타 봇")
 
-with col1:
-    st.title("☕ Barista Bot")
+# 메뉴 표시 토글
+show_menu = st.checkbox("메뉴 보기")
+if show_menu:
+    display_menu()
+
+st.write("안녕하세요! 주문하시겠습니까?")
+
+# 채팅 인터페이스
+chat_container = st.container()
+
+# 사용자 입력
+prompt = st.chat_input("주문을 입력해주세요.")
+
+if prompt:
+    st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # 메뉴 표시 토글
-    show_menu = st.checkbox("Show Menu")
-    if show_menu:
-        display_menu()
-    
-    st.write("Welcome! What would you like to order?")
-
-    # 채팅 메시지 표시
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    # 사용자 입력
-    if prompt := st.chat_input("What's your order?"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
+    with chat_container:
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+        
         # 봇 응답
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
@@ -199,33 +144,38 @@ with col1:
         
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
-        # 여기에 주문 처리 로직 추가 (예: 메시지 분석 후 add_to_order 호출)
+        # 주문 처리 로직 (예시)
+        # 실제 구현에서는 NLP를 사용하여 주문 내용을 파싱해야 합니다
+        if "아메리카노" in prompt.lower():
+            add_to_order(st.session_state.current_user, "아메리카노", "Regular", [])
+            st.write("아메리카노가 주문에 추가되었습니다.")
 
-with col2:
-    st.sidebar.title("Order Management")
+# 사이드바 (주문 관리)
+with st.sidebar:
+    st.title("주문 관리")
     
     # 사용자 선택
-    st.sidebar.selectbox("Select User", ["user1", "user2", "user3"], key="current_user")
+    st.selectbox("사용자 선택", ["user1", "user2", "user3"], key="current_user")
 
     # 현재 주문 상태 표시
-    st.sidebar.header(f"Current Orders for {st.session_state.current_user}")
+    st.header(f"{st.session_state.current_user}의 현재 주문")
     user_orders = get_user_orders(st.session_state.current_user)
     for idx, order in enumerate(user_orders):
-        st.sidebar.write(f"{idx + 1}. {order['drink']} ({order['size']})")
-        st.sidebar.write(f"   Options: {', '.join(order['options'])}")
-        st.sidebar.write(f"   Price: {order['price']} won")
-        st.sidebar.write(f"   Paid: {'Yes' if order['paid'] else 'No'}")
+        st.write(f"{idx + 1}. {order['drink']} ({order['size']})")
+        st.write(f"   옵션: {', '.join(order['options'])}")
+        st.write(f"   가격: {order['price']}원")
+        st.write(f"   결제: {'완료' if order['paid'] else '미완료'}")
         if not order['paid']:
-            if st.sidebar.button(f"Mark as Paid (Order {idx + 1})"):
+            if st.button(f"결제 완료 처리 (주문 {idx + 1})"):
                 mark_order_as_paid(st.session_state.current_user, idx)
                 st.experimental_rerun()
 
     # 일일 매출 계산
     daily_sales = calculate_daily_sales()
-    st.sidebar.header("Daily Sales")
-    st.sidebar.write(f"Total: {daily_sales} won")
+    st.header("일일 매출")
+    st.write(f"총액: {daily_sales}원")
 
     # 새 주문 시작 버튼
-    if st.sidebar.button("Start New Order"):
+    if st.button("새 주문 시작"):
         st.session_state.messages = []
         st.experimental_rerun()
