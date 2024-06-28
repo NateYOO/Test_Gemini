@@ -142,7 +142,7 @@ if 'current_user' not in st.session_state:
 if 'convo' not in st.session_state:
     st.session_state.convo = model.start_chat(history=[
         {'role': 'user', 'parts': [COFFEE_BOT_PROMPT]},
-        {'role': 'model', 'parts': ['Understood. I'm ready to take orders!']}
+        {'role': 'model', 'parts': ["Understood. I'm ready to take orders!"]}
     ])
 
 # 메뉴판 표시 함수
