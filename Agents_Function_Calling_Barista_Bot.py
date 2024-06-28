@@ -3,9 +3,12 @@ import google.generativeai as genai
 from typing import List, Tuple
 
 # Streamlit 페이지 설정
-st.set_page_config(page_title="Barista Bot", page_icon="☕")
+st.set_page_config(page_title="바리스타 봇", page_icon="☕")
 
 # Gemini API 설정
+if "GOOGLE_API_KEY" not in st.secrets:
+    st.error("GOOGLE_API_KEY가 Streamlit secrets에 없습니다. 설정해 주세요.")
+    st.stop()
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
 # 상수 및 전역 변수
@@ -64,9 +67,7 @@ COFFEE_BOT_PROMPT = """당신은 한국의 카페에서 주문을 받는 시스�
 주문 시 "따뜻한"은 HOT, "차가운"은 ICE로 간주합니다.
 "(음료 이름) 주세요"라고 하면 기본 옵션(HOT, Regular 사이즈)으로 주문됩니다.
 
-이 정보를 바탕으로 고객의 주문을 받고 처리해 주세요. 주문이 완료되면 "맛있게 드세요!"라고 인사해 주세요.
-"""
-"""
+이 정보를 바탕으로 고객의 주문을 받고 처리해 주세요. 주문이 완료되면 "맛있게 드세요!"라고 인사해 주세요."""
 
 # 주문 관리 함수들
 def add_to_order(drink: str, modifiers: List[str] = []) -> None:
@@ -93,7 +94,7 @@ def place_order() -> int:
 model = genai.GenerativeModel('gemini-1.0-pro')
 convo = model.start_chat(history=[
     {'role': 'user', 'parts': [COFFEE_BOT_PROMPT]},
-    {'role': 'model', 'parts': ['OK I understand. I will do my best!']}
+    {'role': 'model', 'parts': ['네, 이해했습니다. 최선을 다해 주문을 받겠습니다!']}
 ])
 
 # 세션 상태 초기화
@@ -107,8 +108,8 @@ if 'placed_order' not in st.session_state:
     st.session_state.placed_order = []
 
 # 헤더
-st.title("☕ Barista Bot")
-st.write("Welcome! I'm here to take your coffee order.")
+st.title("☕ 바리스타 봇")
+st.write("안녕하세요! 주문을 받아드리겠습니다.")
 
 # 채팅 메시지 표시
 for message in st.session_state.messages:
@@ -116,7 +117,7 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # 사용자 입력
-if prompt := st.chat_input("What would you like to order?"):
+if prompt := st.chat_input("무엇을 주문하시겠습니까?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -134,38 +135,38 @@ if prompt := st.chat_input("What would you like to order?"):
     st.session_state.messages.append({"role": "assistant", "content": full_response})
 
 # 현재 주문 상태 표시
-st.sidebar.header("Current Order")
+st.sidebar.header("현재 주문")
 if st.session_state.order:
     for idx, (drink, modifiers) in enumerate(st.session_state.order, 1):
         st.sidebar.write(f"{idx}. {drink}")
         if modifiers:
             st.sidebar.write(f"   - {', '.join(modifiers)}")
 else:
-    st.sidebar.write("No items in the order yet.")
+    st.sidebar.write("아직 주문 내역이 없습니다.")
 
 # 주문 확인 및 제출 버튼
 if st.session_state.order and not st.session_state.order_confirmed:
-    if st.sidebar.button("Confirm Order"):
+    if st.sidebar.button("주문 확인"):
         confirm_order()
-        st.sidebar.success("Order confirmed!")
+        st.sidebar.success("주문이 확인되었습니다!")
 
 if st.session_state.order_confirmed and not st.session_state.placed_order:
-    if st.sidebar.button("Place Order"):
+    if st.sidebar.button("주문 제출"):
         wait_time = place_order()
-        st.sidebar.success(f"Order placed! Estimated wait time: {wait_time} minutes")
+        st.sidebar.success(f"주문이 완료되었습니다! 예상 대기 시간: {wait_time}분")
 
 # 주문 완료 후 메시지
 if st.session_state.placed_order:
-    st.sidebar.header("Order Placed")
+    st.sidebar.header("주문 완료")
     for idx, (drink, modifiers) in enumerate(st.session_state.placed_order, 1):
         st.sidebar.write(f"{idx}. {drink}")
         if modifiers:
             st.sidebar.write(f"   - {', '.join(modifiers)}")
-    st.sidebar.write("Thank you for your order!")
+    st.sidebar.write("주문해 주셔서 감사합니다!")
 
 # 새 주문 시작 버튼
 if st.session_state.placed_order:
-    if st.sidebar.button("Start New Order"):
+    if st.sidebar.button("새 주문 시작"):
         st.session_state.order = []
         st.session_state.order_confirmed = False
         st.session_state.placed_order = []
