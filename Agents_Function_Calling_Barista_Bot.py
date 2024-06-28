@@ -2,6 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 from typing import List, Dict
 from datetime import datetime
+import re
 
 # Streamlit 페이지 설정
 st.set_page_config(page_title="Barista Bot", page_icon="☕", layout="wide")
@@ -74,6 +75,48 @@ def mark_order_as_paid(user_id: str, order_index: int) -> None:
     if user_id in st.session_state.orders and 0 <= order_index < len(st.session_state.orders[user_id]):
         st.session_state.orders[user_id][order_index]["paid"] = True
 
+# 주문 파싱 함수
+def parse_order(message: str) -> List[Dict]:
+    orders = []
+    message = message.lower()
+    
+    for category, items in MENU.items():
+        for item, details in items.items():
+            if item.lower() in message:
+                size = "Large" if "large" in message or "큰" in message else "Regular"
+                options = []
+                for option in OPTIONS:
+                    if option.lower() in message:
+                        options.append(option)
+                
+                temp = "HOT"
+                if "ice" in message or "아이스" in message or "차가운" in message:
+                    temp = "ICE"
+                elif "hot" in message or "따뜻한" in message:
+                    temp = "HOT"
+                
+                orders.append({
+                    "drink": item,
+                    "size": size,
+                    "options": options,
+                    "temp": temp
+                })
+    
+    return orders
+
+# 주문 처리 함수
+def process_orders(user_id: str, orders: List[Dict]):
+    for order in orders:
+        add_to_order(user_id, order['drink'], order['size'], order['options'])
+    
+    order_summary = "주문 내역:\n"
+    for idx, order in enumerate(orders, 1):
+        order_summary += f"{idx}. {order['drink']} ({order['size']}, {order['temp']})\n"
+        if order['options']:
+            order_summary += f"   옵션: {', '.join(order['options'])}\n"
+    
+    return order_summary
+
 # Gemini 모델 설정
 model = genai.GenerativeModel('gemini-1.0-pro')
 
@@ -144,11 +187,14 @@ if prompt:
         
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
-        # 주문 처리 로직 (예시)
-        # 실제 구현에서는 NLP를 사용하여 주문 내용을 파싱해야 합니다
-        if "아메리카노" in prompt.lower():
-            add_to_order(st.session_state.current_user, "아메리카노", "Regular", [])
-            st.write("아메리카노가 주문에 추가되었습니다.")
+        # 주문 처리 로직
+        parsed_orders = parse_order(prompt)
+        if parsed_orders:
+            order_summary = process_orders(st.session_state.current_user, parsed_orders)
+            st.write(order_summary)
+            st.success("주문이 추가되었습니다.")
+        else:
+            st.info("주문을 인식하지 못했습니다. 메뉴에 있는 음료를 주문해 주세요.")
 
 # 사이드바 (주문 관리)
 with st.sidebar:
