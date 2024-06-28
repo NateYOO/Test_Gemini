@@ -14,7 +14,10 @@ if "GOOGLE_API_KEY" not in st.secrets:
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
 # 상수 및 전역 변수
-COFFEE_BOT_PROMPT = """당신은 한국의 카페에서 주문을 받는 시스템입니다. 고객의 주문을 정확하게 이해하고 친절하게 응대해야 합니다. 메뉴에 있는 음료만 주문받을 수 있으며, 메뉴에 없는 요청에 대해서는 정중하게 안내해야 합니다."""
+COFFEE_BOT_PROMPT = """당신은 한국의 카페에서 주문을 받는 시스템입니다. 고객의 주문을 정확하게 이해하고 친절하게 응대해야 합니다. 메뉴에 있는 음료만 주문받을 수 있으며, 메뉴에 없는 요청에 대해서는 정중하게 안내해야 합니다.
+ - 다양한 사이즈 요청을 이해하고 주문을 받습니다.
+ - 사용자가 원하는 요청에 따라 금액을 정확히 계산하고 출력합니다.
+ - 친절한게 응답합니다."""
 
 MENU = {
     "커피 음료": {
@@ -196,7 +199,7 @@ if 'orders' not in st.session_state:
 if 'current_user' not in st.session_state:
     st.session_state.current_user = "user1"
 if 'convo' not in st.session_state:
-    model = genai.GenerativeModel('gemini-1.0-pro')
+    model = genai.GenerativeModel('gemini-1.5-pro')
     st.session_state.convo = model.start_chat(history=[
         {'role': 'user', 'parts': [COFFEE_BOT_PROMPT]},
         {'role': 'model', 'parts': ["네, 이해했습니다. 주문을 받을 준비가 되었습니다!"]}
