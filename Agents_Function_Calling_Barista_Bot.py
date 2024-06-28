@@ -14,8 +14,6 @@ if "GOOGLE_API_KEY" not in st.secrets:
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
 # 상수 및 전역 변수
-COFFEE_BOT_PROMPT = """당신은 한국의 카페에서 주문을 받는 시스템입니다. 고객의 주문을 정확하게 이해하고 친절하게 응대해야 합니다. 메뉴에 있는 음료만 주문받을 수 있으며, 메뉴에 없는 요청에 대해서는 정중하게 안내해야 합니다."""
-
 MENU = {
     "커피 음료": {
         "아메리카노": {"price": 4500, "options": ["HOT", "ICE"]},
@@ -43,46 +41,27 @@ OPTIONS = {
     "카라멜 시럽": 500
 }
 
-SIZE_KEYWORDS = {
-    "Large": ["large", "큰", "크게", "사이즈업", "라지", "큰 거", "큰거", "큰 사이즈", "대형", "맥시멈"],
-    "Regular": ["regular", "보통", "중간", "기본", "스탠다드", "작은", "작게", "small", "작은 거", "작은거", "작은 사이즈"]
-}
+# 세션 상태 초기화
+if 'order_state' not in st.session_state:
+    st.session_state.order_state = {
+        'drink': None,
+        'size': None,
+        'temp': None,
+        'options': [],
+        'confirmed': False,
+        'payment_method': None
+    }
+if 'orders' not in st.session_state:
+    st.session_state.orders = {}
+if 'current_user' not in st.session_state:
+    st.session_state.current_user = "user1"
 
 # 주문 및 사용자 관리 함수
-def parse_order(message: str) -> Dict:
-    message = message.lower()
-    order = {}
-    
-    for category, items in MENU.items():
-        for item, details in items.items():
-            if item.lower() in message:
-                order['drink'] = item
-                break
-        if 'drink' in order:
-            break
-    
-    if 'drink' in order:
-        order['size'] = next((s for s, keywords in SIZE_KEYWORDS.items() if any(keyword in message for keyword in keywords)), None)
-        order['temp'] = "ICE" if any(word in message for word in ["ice", "아이스", "차가운"]) else ("HOT" if any(word in message for word in ["hot", "따뜻한", "뜨거운"]) else None)
-        order['options'] = [option for option in OPTIONS if option.lower() in message]
-    
-    return order
-
-def get_missing_order_info(order: Dict) -> List[str]:
-    missing = []
-    if 'drink' not in order:
-        missing.append("음료")
-    if 'size' not in order or not order['size']:
-        missing.append("사이즈")
-    if 'temp' not in order or not order['temp']:
-        missing.append("온도")
-    return missing
-
-def process_order(user_id: str, order: Dict) -> str:
-    drink = order['drink']
-    size = order['size']
-    temp = order['temp']
-    options = order.get('options', [])
+def process_order(user_id: str, order_state: Dict) -> str:
+    drink = order_state['drink']
+    size = order_state['size']
+    temp = order_state['temp']
+    options = order_state['options']
     
     category = next((cat for cat, items in MENU.items() if drink in items), None)
     if category:
@@ -97,8 +76,8 @@ def process_order(user_id: str, order: Dict) -> str:
             "temp": temp,
             "options": options,
             "price": total_price,
-            "paid": False,
-            "payment_method": None,
+            "paid": True,
+            "payment_method": order_state['payment_method'],
             "timestamp": datetime.now().isoformat()
         }
         
@@ -116,42 +95,10 @@ def get_user_orders(user_id: str) -> List[Dict]:
 def calculate_daily_sales() -> int:
     return sum(order["price"] for user_orders in st.session_state.orders.values() for order in user_orders if order["paid"])
 
-def mark_order_as_paid(user_id: str, order_index: int) -> None:
-    if user_id in st.session_state.orders and 0 <= order_index < len(st.session_state.orders[user_id]):
-        st.session_state.orders[user_id][order_index]["paid"] = True
-        update_order_history(user_id, order_index, {"paid": True})
-
 def cancel_order(user_id: str, order_index: int) -> None:
     if user_id in st.session_state.orders and 0 <= order_index < len(st.session_state.orders[user_id]):
         del st.session_state.orders[user_id][order_index]
         remove_from_order_history(user_id, order_index)
-
-def change_order_size(user_id: str, order_index: int, new_size: str) -> None:
-    if user_id in st.session_state.orders and 0 <= order_index < len(st.session_state.orders[user_id]):
-        order = st.session_state.orders[user_id][order_index]
-        old_size = order['size']
-        if old_size != new_size:
-            price_difference = SIZES[new_size] - SIZES[old_size]
-            order['size'] = new_size
-            order['price'] += price_difference
-            update_order_history(user_id, order_index, {"size": new_size, "price": order['price']})
-
-def display_menu():
-    st.header("☕ 메뉴판")
-    for category, items in MENU.items():
-        st.subheader(category)
-        for item, details in items.items():
-            price = details['price']
-            options = ', '.join(details['options'])
-            st.write(f"- {item}: {price}원 ({options})")
-    
-    st.subheader("사이즈")
-    for size, price in SIZES.items():
-        st.write(f"- {size}: +{price}원")
-    
-    st.subheader("추가 옵션")
-    for option, price in OPTIONS.items():
-        st.write(f"- {option}: +{price}원")
 
 # 주문 히스토리 관리 함수
 def load_order_history():
@@ -172,12 +119,6 @@ def add_to_order_history(user_id: str, order: Dict):
     history[user_id].append(order)
     save_order_history(history)
 
-def update_order_history(user_id: str, order_index: int, updates: Dict):
-    history = load_order_history()
-    if user_id in history and 0 <= order_index < len(history[user_id]):
-        history[user_id][order_index].update(updates)
-        save_order_history(history)
-
 def remove_from_order_history(user_id: str, order_index: int):
     history = load_order_history()
     if user_id in history and 0 <= order_index < len(history[user_id]):
@@ -188,19 +129,118 @@ def get_user_order_history(user_id: str) -> List[Dict]:
     history = load_order_history()
     return history.get(user_id, [])
 
-# 세션 상태 초기화
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
-if 'orders' not in st.session_state:
-    st.session_state.orders = {}
-if 'current_user' not in st.session_state:
-    st.session_state.current_user = "user1"
-if 'convo' not in st.session_state:
-    model = genai.GenerativeModel('gemini-1.5-pro')
-    st.session_state.convo = model.start_chat(history=[
-        {'role': 'user', 'parts': [COFFEE_BOT_PROMPT]},
-        {'role': 'model', 'parts': ["네, 이해했습니다. 주문을 받을 준비가 되었습니다!"]}
-    ])
+# 대화 관리 및 주문 처리 함수
+def get_bot_response(user_input: str) -> str:
+    state = st.session_state.order_state
+    
+    if not state['drink']:
+        drink = parse_drink(user_input)
+        if drink:
+            state['drink'] = drink
+            return f"{drink} 좋은 선택이에요. 따뜻하게 드릴까요, 아니면 시원하게 아이스로 준비할까요?"
+        else:
+            return "죄송합니다. 주문하신 음료를 이해하지 못했어요. 메뉴에 있는 음료를 말씀해 주시겠어요?"
+
+    elif not state['temp']:
+        temp = parse_temperature(user_input)
+        if temp:
+            state['temp'] = temp
+            return f"{temp} {state['drink']}로 준비하겠습니다. 사이즈는 어떻게 해드릴까요? 레귤러와 라지 중 선택하실 수 있어요."
+        else:
+            return "죄송합니다. 온도를 이해하지 못했어요. '따뜻하게' 또는 '차갑게'로 말씀해 주세요."
+
+    elif not state['size']:
+        size = parse_size(user_input)
+        if size:
+            state['size'] = size
+            return f"{size} 사이즈로 준비하겠습니다. 혹시 샷 추가나 시럽 추가 같은 옵션을 원하시나요?"
+        else:
+            return "죄송합니다. 사이즈를 이해하지 못했어요. '레귤러' 또는 '라지'로 말씀해 주세요."
+
+    elif not state['confirmed']:
+        options = parse_options(user_input)
+        if options:
+            state['options'].extend(options)
+        
+        order_summary = f"{state['temp']} {state['size']} {state['drink']}"
+        if state['options']:
+            order_summary += f" (옵션: {', '.join(state['options'])})"
+        
+        state['confirmed'] = True
+        return f"주문 내역을 확인해 드릴게요: {order_summary}. 맞으신가요? 결제를 진행하시려면 '네'라고 말씀해 주세요."
+
+    elif not state['payment_method']:
+        if '네' in user_input.lower():
+            return "결제 방법을 선택해 주세요. 현금, 카드, 모바일 중 어떤 방법으로 하시겠어요?"
+        else:
+            state['confirmed'] = False
+            return "주문을 변경하시겠어요? 어떤 부분을 수정할까요?"
+
+    else:
+        payment_method = parse_payment_method(user_input)
+        if payment_method:
+            state['payment_method'] = payment_method
+            order_result = process_order(st.session_state.current_user, state)
+            st.session_state.order_state = {
+                'drink': None, 'size': None, 'temp': None,
+                'options': [], 'confirmed': False, 'payment_method': None
+            }
+            return f"{order_result} {payment_method}로 결제해 주셔서 감사합니다. 주문하신 음료를 곧 준비해 드리겠습니다!"
+        else:
+            return "죄송합니다. 결제 방법을 이해하지 못했어요. 현금, 카드, 모바일 중 하나로 말씀해 주세요."
+
+# 파싱 함수들
+def parse_drink(input: str) -> str:
+    input = input.lower()
+    for category in MENU.values():
+        for drink in category.keys():
+            if drink.lower() in input:
+                return drink
+    return None
+
+def parse_temperature(input: str) -> str:
+    if any(word in input.lower() for word in ["따뜻", "뜨겁", "핫"]):
+        return "HOT"
+    elif any(word in input.lower() for word in ["차갑", "시원", "아이스"]):
+        return "ICE"
+    return None
+
+def parse_size(input: str) -> str:
+    if any(word in input.lower() for word in ["큰", "라지", "large"]):
+        return "Large"
+    elif any(word in input.lower() for word in ["작은", "레귤러", "regular"]):
+        return "Regular"
+    return None
+
+def parse_options(input: str) -> List[str]:
+    return [option for option in OPTIONS.keys() if option.lower() in input.lower()]
+
+def parse_payment_method(input: str) -> str:
+    if "현금" in input:
+        return "현금"
+    elif "카드" in input:
+        return "카드"
+    elif "모바일" in input:
+        return "모바일"
+    return None
+
+# 메뉴 표시 함수
+def display_menu():
+    st.header("☕ 메뉴판")
+    for category, items in MENU.items():
+        st.subheader(category)
+        for item, details in items.items():
+            price = details['price']
+            options = ', '.join(details['options'])
+            st.write(f"- {item}: {price}원 ({options})")
+    
+    st.subheader("사이즈")
+    for size, price in SIZES.items():
+        st.write(f"- {size}: +{price}원")
+    
+    st.subheader("추가 옵션")
+    for option, price in OPTIONS.items():
+        st.write(f"- {option}: +{price}원")
 
 # 메인 애플리케이션
 st.title("☕ 바리스타 봇")
@@ -209,49 +249,16 @@ st.title("☕ 바리스타 봇")
 if st.checkbox("메뉴 보기"):
     display_menu()
 
-st.write("안녕하세요! 주문하시겠습니까?")
-
 # 채팅 인터페이스
 chat_container = st.container()
 
 # 사용자 입력
-prompt = st.chat_input("주문을 입력해주세요.")
+user_input = st.chat_input("주문을 입력해주세요.")
 
-if prompt:
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    
-    with chat_container:
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-        
-        # 봇 응답
-        with st.chat_message("assistant"):
-            message_placeholder = st.empty()
-            full_response = ""
-            
-            parsed_order = parse_order(prompt)
-            missing_info = get_missing_order_info(parsed_order)
-            
-            if missing_info:
-                full_response = f"죄송합니다. 주문을 완료하기 위해 다음 정보가 더 필요합니다: {', '.join(missing_info)}. 알려주시겠어요?"
-            else:
-                order_result = process_order(st.session_state.current_user, parsed_order)
-                full_response = f"{order_result}\n결제 방법을 선택해 주세요: 현금, 카드, 또는 모바일 결제"
-            
-            message_placeholder.markdown(full_response)
-        
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
-
-# 결제 방법 선택
-if st.session_state.orders.get(st.session_state.current_user):
-    latest_order = st.session_state.orders[st.session_state.current_user][-1]
-    if not latest_order.get('payment_method'):
-        payment_method = st.radio("결제 방법 선택:", ["현금", "카드", "모바일 결제"])
-        if st.button("결제 확인"):
-            latest_order['payment_method'] = payment_method
-            st.success(f"결제 방법이 {payment_method}로 설정되었습니다.")
-            st.experimental_rerun()
+if user_input:
+    st.chat_message("user").write(user_input)
+    bot_response = get_bot_response(user_input)
+    st.chat_message("assistant").write(bot_response)
 
 # 사이드바 (주문 관리)
 with st.sidebar:
@@ -268,26 +275,22 @@ with st.sidebar:
         st.write(f"   결제: {'완료' if order['paid'] else '미완료'}")
         st.write(f"   결제 방법: {order.get('payment_method', '미선택')}")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            if not order['paid']:
-                if st.button(f"결제 완료 (주문 {idx + 1})"):
-                    mark_order_as_paid(st.session_state.current_user, idx)
-                    st.experimental_rerun()
-        with col2:
-            if st.button(f"주문 취소 (주문 {idx + 1})"):
-                cancel_order(st.session_state.current_user, idx)
-                st.success(f"주문 {idx + 1}이 취소되었습니다.")
-                st.experimental_rerun()
+        if st.button(f"주문 취소 (주문 {idx + 1})"):
+            cancel_order(st.session_state.current_user, idx)
+            st.success(f"주문 {idx + 1}이 취소되었습니다.")
+            st.experimental_rerun()
 
     st.header("일일 매출")
     st.write(f"총액: {calculate_daily_sales()}원")
 
     if st.button("새 주문 시작"):
-        st.session_state.messages = []
+        st.session_state.order_state = {
+            'drink': None, 'size': None, 'temp': None,
+            'options': [], 'confirmed': False, 'payment_method': None
+        }
         st.experimental_rerun()
 
- # 주문 히스토리 표시
+    # 주문 히스토리 표시
     st.header("주문 히스토리")
     user_history = get_user_order_history(st.session_state.current_user)
     for idx, order in enumerate(user_history, 1):
