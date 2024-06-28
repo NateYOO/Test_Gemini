@@ -44,6 +44,52 @@ OPTIONS = {
     "카라멜 시럽": 500
 }
 
+import streamlit as st
+import google.generativeai as genai
+from typing import List, Dict
+from datetime import datetime
+import re
+
+# Streamlit 페이지 설정
+st.set_page_config(page_title="Barista Bot", page_icon="☕", layout="wide")
+
+# Gemini API 설정
+if "GOOGLE_API_KEY" not in st.secrets:
+    st.error("GOOGLE_API_KEY not found in Streamlit secrets. Please set it up.")
+    st.stop()
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+
+# 상수 및 전역 변수
+COFFEE_BOT_PROMPT = """You are an order-taking system at a cafe in Korea. You must accurately understand customer orders and respond politely. You can only take orders for drinks on the menu and should politely guide customers if they request items not on the menu. Respond in Korean, maintaining a polite and friendly tone appropriate for a Korean cafe setting."""
+
+# 메뉴 및 가격 정보
+MENU = {
+    "커피 음료": {
+        "아메리카노": {"price": 4500, "options": ["HOT", "ICE"]},
+        "카페라떼": {"price": 5000, "options": ["HOT", "ICE"]},
+        "바닐라라떼": {"price": 5500, "options": ["HOT", "ICE"]},
+        "카푸치노": {"price": 5000, "options": ["HOT"]},
+        "카라멜마키아또": {"price": 5500, "options": ["HOT", "ICE"]},
+        "에스프레소": {"price": 3000, "options": ["HOT"]},
+    },
+    "논커피 음료": {
+        "녹차라떼": {"price": 5500, "options": ["HOT", "ICE"]},
+        "초콜릿": {"price": 5000, "options": ["HOT", "ICE"]},
+        "유자차": {"price": 5000, "options": ["HOT", "ICE"]},
+        "캐모마일티": {"price": 4500, "options": ["HOT"]},
+        "페퍼민트티": {"price": 4500, "options": ["HOT"]},
+    }
+}
+
+SIZES = {"Regular": 0, "Large": 500}
+OPTIONS = {
+    "샷 추가": 500,
+    "휘핑크림 추가": 500,
+    "바닐라 시럽": 500,
+    "헤이즐넛 시럽": 500,
+    "카라멜 시럽": 500
+}
+
 # 주문 및 사용자 관리 함수
 def add_to_order(user_id: str, drink: str, size: str, options: List[str]) -> None:
     if user_id not in st.session_state.orders:
@@ -74,6 +120,11 @@ def calculate_daily_sales() -> int:
 def mark_order_as_paid(user_id: str, order_index: int) -> None:
     if user_id in st.session_state.orders and 0 <= order_index < len(st.session_state.orders[user_id]):
         st.session_state.orders[user_id][order_index]["paid"] = True
+
+# 새로운 함수: 주문 취소
+def cancel_order(user_id: str, order_index: int) -> None:
+    if user_id in st.session_state.orders and 0 <= order_index < len(st.session_state.orders[user_id]):
+        del st.session_state.orders[user_id][order_index]
 
 # 주문 파싱 함수
 def parse_order(message: str) -> List[Dict]:
@@ -211,9 +262,17 @@ with st.sidebar:
         st.write(f"   옵션: {', '.join(order['options'])}")
         st.write(f"   가격: {order['price']}원")
         st.write(f"   결제: {'완료' if order['paid'] else '미완료'}")
-        if not order['paid']:
-            if st.button(f"결제 완료 처리 (주문 {idx + 1})"):
-                mark_order_as_paid(st.session_state.current_user, idx)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if not order['paid']:
+                if st.button(f"결제 완료 (주문 {idx + 1})"):
+                    mark_order_as_paid(st.session_state.current_user, idx)
+                    st.experimental_rerun()
+        with col2:
+            if st.button(f"주문 취소 (주문 {idx + 1})"):
+                cancel_order(st.session_state.current_user, idx)
+                st.success(f"주문 {idx + 1}이 취소되었습니다.")
                 st.experimental_rerun()
 
     # 일일 매출 계산
