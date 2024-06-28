@@ -3,7 +3,7 @@ import google.generativeai as genai
 from typing import List, Dict
 from datetime import datetime
 
-# Streamlit 페이지 설정 (스크립트 최상단에 위치)
+# Streamlit 페이지 설정
 st.set_page_config(page_title="바리스타 봇", page_icon="☕", layout="wide")
 
 # Gemini API 설정
@@ -84,7 +84,7 @@ def parse_order(message: str) -> List[Dict]:
     for category, items in MENU.items():
         for item, details in items.items():
             if item.lower() in message:
-                size = "Large" if "large" in message or "큰" in message else "Regular"
+                size = "Large" if any(word in message for word in ["large", "큰", "크게", "사이즈업"]) else "Regular"
                 options = [option for option in OPTIONS if option.lower() in message]
                 temp = "ICE" if any(word in message for word in ["ice", "아이스", "차가운"]) else "HOT"
                 
@@ -108,6 +108,15 @@ def process_orders(user_id: str, orders: List[Dict]) -> str:
             order_summary += f"   옵션: {', '.join(order['options'])}\n"
     
     return order_summary
+
+def change_order_size(user_id: str, order_index: int, new_size: str) -> None:
+    if user_id in st.session_state.orders and 0 <= order_index < len(st.session_state.orders[user_id]):
+        order = st.session_state.orders[user_id][order_index]
+        old_size = order['size']
+        if old_size != new_size:
+            price_difference = SIZES[new_size] - SIZES[old_size]
+            order['size'] = new_size
+            order['price'] += price_difference
 
 def display_menu():
     st.header("☕ 메뉴판")
@@ -181,6 +190,17 @@ if prompt:
             order_summary = process_orders(st.session_state.current_user, parsed_orders)
             st.write(order_summary)
             st.success("주문이 추가되었습니다.")
+            
+            # 사이즈 변경 요청 확인
+            if any(word in prompt.lower() for word in ["사이즈업", "큰 사이즈", "라지"]):
+                st.warning("사이즈 변경 요청이 감지되었습니다. 확인이 필요합니다.")
+                user_orders = get_user_orders(st.session_state.current_user)
+                for idx, order in enumerate(user_orders):
+                    if order['size'] == 'Regular':
+                        if st.button(f"{order['drink']}를 Large 사이즈로 변경하시겠습니까?"):
+                            change_order_size(st.session_state.current_user, idx, 'Large')
+                            st.success(f"{order['drink']}의 사이즈가 Large로 변경되었습니다.")
+                            st.experimental_rerun()
         else:
             st.info("주문을 인식하지 못했습니다. 메뉴에 있는 음료를 주문해 주세요.")
 
