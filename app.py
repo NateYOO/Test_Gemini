@@ -153,4 +153,3 @@ def main():
         # 주문 히스토리 표시
         st.header("주문 히스토리")
         user_history = get_user_order_history(st.session_state.current_user)
-        for idx, order
