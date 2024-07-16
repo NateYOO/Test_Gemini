@@ -1,0 +1,8 @@
+streamlit==1.33.0
+pytube
+moviepy
+google-generativeai
+streamlit-player
+google-api-python-client
+mock
+pandas
